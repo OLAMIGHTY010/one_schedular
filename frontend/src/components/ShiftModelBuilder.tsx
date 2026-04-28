@@ -21,7 +21,7 @@ type Props = { onSaved?: () => void };
 export default function ShiftModelBuilder({ onSaved }: Props) {
   const [models,      setModels]      = useState<(ShiftModelPayload & { id: number })[]>([]);
   const [showForm,    setShowForm]    = useState(false);
-  const [editingUnit, setEditingUnit] = useState<string | null>(null);
+  const [editingId,   setEditingId]   = useState<number | null>(null);
   const [unitName,    setUnitName]    = useState("");
   const [types,       setTypes]       = useState<Local[]>(defaults);
   const [days,        setDays]        = useState<string[]>([...ALL_DAYS]);
@@ -40,7 +40,7 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
   const reset = () => {
     setUnitName(""); setTypes(defaults.map((s) => ({ ...s, id: makeId() })));
     setDays([...ALL_DAYS]); setAllDays(true); setMaxLeave(1); setNightCont(true);
-    setEditingUnit(null); setError(""); setShowForm(false);
+    setEditingId(null); setError(""); setShowForm(false);
   };
 
   const openEdit = (m: ShiftModelPayload & { id: number }) => {
@@ -50,7 +50,7 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
     setDays(wd); setAllDays(wd.length === 7);
     setMaxLeave(m.max_concurrent_leave ?? 1);
     setNightCont(m.night_continues ?? true);
-    setEditingUnit(m.unit_name); setShowForm(true);
+    setEditingId(m.id); setShowForm(true);
   };
 
   const toggleDay = (day: string) => {
@@ -71,17 +71,15 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
       unit_name:            unitName.trim(),
       shift_types:          types.map(({ id: _id, ...s }) => s),
       working_days:         allDays ? null : days,
-      pattern_type:         "rotation",
-      enforce_pattern:      false,
       max_concurrent_leave: maxLeave,
       night_continues:      nightCont,
     };
     setError(""); setSaving(true); setSuccess("");
     try {
-      editingUnit
-        ? await updateShiftModel(editingUnit, payload)
+      editingId
+        ? await updateShiftModel(editingId, payload)
         : await createShiftModel(payload);
-      setSuccess(editingUnit ? "Model updated!" : "Model saved!");
+      setSuccess(editingId ? "Model updated!" : "Model saved!");
       await load(); onSaved?.();
       setTimeout(() => { setSuccess(""); reset(); }, 1500);
     } catch (e: any) {
@@ -89,9 +87,9 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
     } finally { setSaving(false); }
   };
 
-  const handleDelete = async (unit_name: string) => {
-    if (!confirm(`Delete "${unit_name}"?`)) return;
-    try { await deleteShiftModel(unit_name); await load(); onSaved?.(); }
+  const handleDelete = async (id: number) => {
+    if (!confirm(`Delete this model?`)) return;
+    try { await deleteShiftModel(id); await load(); onSaved?.(); }
     catch (e: any) { alert(e.response?.data?.detail ?? "Failed to delete."); }
   };
 
@@ -132,7 +130,7 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
                   className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition">
                   Edit
                 </button>
-                <button onClick={() => handleDelete(m.unit_name)}
+                <button onClick={() => handleDelete(m.id)}
                   className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition">
                   Delete
                 </button>
@@ -150,7 +148,7 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Unit / Team Name</label>
             <input value={unitName} onChange={(e) => setUnitName(e.target.value)}
-              placeholder="e.g. Alpha Team" disabled={!!editingUnit}
+              placeholder="e.g. Alpha Team" disabled={editingId !== null}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7b1e3a] disabled:bg-gray-100" />
           </div>
 
@@ -266,7 +264,7 @@ export default function ShiftModelBuilder({ onSaved }: Props) {
               className={`flex-1 py-2.5 rounded-lg font-semibold text-white transition ${
                 saving ? "bg-gray-400 cursor-not-allowed" : "bg-[#7b1e3a] hover:bg-[#9b2a4e]"
               }`}>
-              {saving ? "Saving…" : editingUnit ? "Update Model" : "Save Model"}
+              {saving ? "Saving…" : editingId !== null ? "Update Model" : "Save Model"}
             </button>
             <button onClick={reset}
               className="px-4 py-2.5 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition">

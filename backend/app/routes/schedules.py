@@ -28,6 +28,7 @@ class GenerateRequest(BaseModel):
     leave_schedule: List[LeaveEntry] = []
     shift_model_id: Optional[int]   = None
     reset_rotation: bool             = False
+    exclude_team_lead: bool          = False
 
 
 class SaveRequest(BaseModel):
@@ -61,12 +62,16 @@ def preview(
     user: User    = Depends(require_teamlead),
 ):
     # All officers — ONLY from this team
-    officers = db.query(Officer).filter(
+    officers_query = db.query(Officer).filter(
         Officer.team_id   == user.team_id,
         Officer.is_active == True,
-    ).all()
+    )
+    if data.exclude_team_lead:
+        officers_query = officers_query.filter(Officer.is_teamlead == False)
+        
+    officers = officers_query.all()
     if not officers:
-        raise HTTPException(422, "No officers in your team. Add officers before generating a schedule.")
+        raise HTTPException(422, "No officers available for scheduling in your team.")
 
     officer_names = [o.name for o in officers]
 

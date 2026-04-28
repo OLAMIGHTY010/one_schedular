@@ -56,6 +56,7 @@ class ShiftModel(Base):
     working_days         = Column(JSON, nullable=True)
     max_concurrent_leave = Column(Integer, default=1)
     night_continues      = Column(Boolean, default=True)
+    rotation_pattern     = Column(JSON, nullable=True)  # List of shift names or "Off"
 
     @property
     def morning_count(self):

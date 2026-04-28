@@ -4,6 +4,7 @@ import LoginPage         from "./pages/Login";
 import TeamSetupPage     from "./pages/TeamSetupPage";
 import TeamLeadDashboard from "./pages/TeamLeadDashboard";
 import OfficerDashboard  from "./pages/OfficerDashboard";
+import SkeletonLoader from "./components/SkeletonLoader";
 
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(null);
@@ -57,16 +58,9 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#7b1e3a] flex items-center justify-center">
-      <div className="text-center">
-        <div className="bg-white rounded-2xl px-8 py-5 shadow-lg inline-block mb-6">
-          <svg width="160" height="44" viewBox="0 0 160 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="22" cy="18" r="15.8" fill="#E8001C" />
-            <circle cx="18.8" cy="11.3" r="5.4" fill="white" />
-            <text x="44" y="28" fontFamily="Arial" fontWeight="700" fontSize="24" fill="#555555" letterSpacing="-0.5">sterling</text>
-          </svg>
-        </div>
-        <p className="text-white opacity-70 text-sm animate-pulse">Loading…</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col pt-12 px-6">
+      <div className="max-w-7xl mx-auto w-full">
+        <SkeletonLoader />
       </div>
     </div>
   );

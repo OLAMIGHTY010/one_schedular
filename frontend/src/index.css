@@ -1,14 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
+:root {
+  --primary: #7b1e3a;
+  --primary-light: #9b2a4e;
+  --secondary: #0f172a;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
 }
 
-body {
-  font-family: Arial, sans-serif;
-  background-color: #f3f4f6;
-  margin: 0;
-  padding: 0;
+@layer base {
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: radial-gradient(circle at top right, #fff5f7, #f8fafc);
+    background-attachment: fixed;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    @apply rounded-2xl transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply shadow-lg border-opacity-80;
+    transform: translateY(-2px);
+  }
+
+  .glass-nav {
+    background: rgba(123, 30, 58, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-xl font-semibold text-white transition-all duration-200 
+           bg-gradient-to-r from-[#7b1e3a] to-[#9b2a4e]
+           hover:shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 rounded-xl font-semibold text-[#7b1e3a] transition-all duration-200 
+           bg-white border border-[#7b1e3a] border-opacity-20
+           hover:bg-gray-50 active:scale-95;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-white bg-opacity-50 border border-gray-200 rounded-xl text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[#7b1e3a] focus:ring-opacity-20 
+           focus:border-[#7b1e3a] transition-all;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(123, 30, 58, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(123, 30, 58, 0.2);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
 }

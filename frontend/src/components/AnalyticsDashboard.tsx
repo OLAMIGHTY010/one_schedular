@@ -16,7 +16,7 @@ export default function AnalyticsDashboard({ year, month, unitName }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    fetchAnalytics({ year, month, unit_name: unitName ?? undefined, months_back: 6 })
+    fetchAnalytics({ year, month, months_back: 6 })
       .then(setData).catch(() => {}).finally(() => setLoading(false));
   }, [year, month, unitName]);
 

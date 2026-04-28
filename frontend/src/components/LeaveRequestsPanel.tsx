@@ -14,7 +14,7 @@ export default function LeaveRequestsPanel() {
 
   const load = async () => {
     try {
-      const data = await fetchLeaveRequests(filter === "pending" ? { status: "pending" } : undefined);
+      const data = await fetchLeaveRequests(filter === "pending" ? "pending" : undefined);
       setRequests(data);
     } catch {}
   };
@@ -22,9 +22,8 @@ export default function LeaveRequestsPanel() {
   useEffect(() => { load(); }, [filter]);
 
   const handle = async (id: number, action: "approve" | "reject") => {
-    const reviewer = localStorage.getItem("display_name") || "Team Lead";
     try {
-      await reviewLeaveRequest(id, action, reviewer);
+      await reviewLeaveRequest(id, action);
       setMsg(`✅ Request ${action === "approve" ? "approved" : "rejected"}.`);
       setTimeout(() => setMsg(""), 3000);
       await load();

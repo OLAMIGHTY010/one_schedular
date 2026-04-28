@@ -54,8 +54,8 @@ def add_officer(
     _assert_teamlead(user, db)
 
     email = data.email.strip().lower()
-    if not email.endswith("@sterling.ng"):
-        raise HTTPException(422, "Officer email must end with @sterling.ng")
+    if not email or "@" not in email:
+        raise HTTPException(422, "Please provide a valid email address")
 
     # Reactivate if previously removed from THIS team
     existing = db.query(Officer).filter(

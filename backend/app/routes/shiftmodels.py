@@ -38,6 +38,7 @@ class ShiftModelIn(BaseModel):
     working_days:         Optional[List[str]] = None
     max_concurrent_leave: int                 = 1
     night_continues:      bool                = True
+    rotation_pattern:     Optional[List[str]] = None
 
     @field_validator("unit_name")
     @classmethod
@@ -71,6 +72,7 @@ def _to_dict(m: ShiftModel) -> dict:
         "working_days":         m.working_days,
         "max_concurrent_leave": m.max_concurrent_leave,
         "night_continues":      m.night_continues,
+        "rotation_pattern":     m.rotation_pattern,
     }
 
 
@@ -110,6 +112,7 @@ def create_model(
         working_days         = data.working_days,
         max_concurrent_leave = data.max_concurrent_leave,
         night_continues      = data.night_continues,
+        rotation_pattern     = data.rotation_pattern,
     )
     db.add(m)
     db.commit()
@@ -137,6 +140,7 @@ def update_model(
     m.working_days         = data.working_days
     m.max_concurrent_leave = data.max_concurrent_leave
     m.night_continues      = data.night_continues
+    m.rotation_pattern     = data.rotation_pattern
     db.commit()
     db.refresh(m)
     return _to_dict(m)

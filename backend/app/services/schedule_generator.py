@@ -9,55 +9,19 @@ SMO_MAX_LEAVE = 1
 def expand_leave_with_weekends_and_holidays(
     leave_dates:   List[str],
     holiday_dates: Set[str],
+    extend_forward: bool = False,
 ) -> List[str]:
     """
-    Return exactly the consecutive dates from the first to last selected date.
-    No automatic forward or backward extension.
-    
-    - Monday-to-Friday leave = exactly those 5 days only.
-    - Monday-to-Monday leave = all 8 days including the weekend in between,
-      because they naturally fall within the selected range.
-    - The officer's normal off days (weekends) that fall OUTSIDE the leave
-      range are never pulled into the leave.
+    Return the consecutive dates from start to end of the leave request.
+    If extend_forward is True, includes following weekends/holidays.
     """
     if not leave_dates:
-        return leave_dates
+        return []
 
     date_objs = sorted([date.fromisoformat(d) for d in leave_dates])
     start     = date_objs[0]
     end       = date_objs[-1]
 
-    result: List[str] = []
-    cur = start
-    while cur <= end:
-        result.append(cur.isoformat())
-        cur += timedelta(days=1)
-    return result
-
-
-def expand_leave_with_weekends_and_holidays(
-    leave_dates: List[str],
-    holiday_dates: Set[str],
-    extend_forward: bool = False,   # optional for future teams
-) -> List[str]:
-    """
-    Default SMO behavior:
-    - Use ONLY selected dates
-    - Do NOT include previous or next weekends automatically
-
-    Optional:
-    - extend_forward=True → extend into weekend/holiday AFTER leave ends
-    """
-
-    if not leave_dates:
-        return []
-
-    date_objs = sorted(date.fromisoformat(d) for d in leave_dates)
-
-    start = date_objs[0]
-    end   = date_objs[-1]
-
-    # ✅ Only extend FORWARD if explicitly enabled
     if extend_forward:
         while True:
             nxt = end + timedelta(days=1)
@@ -66,15 +30,11 @@ def expand_leave_with_weekends_and_holidays(
             else:
                 break
 
-    # ❌ NEVER extend backward
-
-    # Build final leave range
-    result = []
+    result: List[str] = []
     cur = start
     while cur <= end:
         result.append(cur.isoformat())
         cur += timedelta(days=1)
-
     return result
 
 def check_coverage(
@@ -123,106 +83,184 @@ def generate_schedule(
     start_offset: int = 0,
 ) -> Tuple[List[dict], int]:
     """
-    Fill-up rotation with leave skip.
-
-    Each day:
-      1. start_idx = (rotation_day * step) % n
-      2. Walk ordered list from start_idx
-      3. Officers on leave → Off as 'Name (Leave)', next officer fills their slot
-      4. Fill Morning first, then Night, then Off
-      5. rotation_day advances by 1 each working day
-
-    Night officers on day D also appear in 12AM-7AM on day D+1.
+    Pattern-based schedule generator. 
+    Uses ShiftModel.rotation_pattern if available, otherwise defaults to SMO rotation.
     """
-    morning_count = SMO_MORNING
-    night_count   = SMO_NIGHT
-    night_cont    = True
-    working_days: Optional[List[str]] = None
-
-    if shift_model:
-        morning_count = shift_model.morning_count
-        night_count   = shift_model.night_count
-        night_cont    = getattr(shift_model, "night_continues", True)
-        working_days  = shift_model.working_days
-
     n = len(officers)
     if n == 0:
         return [], start_offset
 
-    step       = morning_count + night_count
+    # 1. Resolve Shift Model Parameters
+    pattern      = getattr(shift_model, "rotation_pattern", None)
+    night_cont   = getattr(shift_model, "night_continues", True)
+    working_days = getattr(shift_model, "working_days", None)
+    
+    # Setup shift requirements array for dynamic balancing
+    shift_reqs = []
+    if shift_model and getattr(shift_model, "shift_types", None):
+        for s in shift_model.shift_types:
+            name = s.get("name")
+            shift_reqs.append({
+                "name": name,
+                "count": int(s.get("count", 2)),
+                "display": f"{name} ({s.get('start_time','?')} - {s.get('end_time','?')})"
+            })
+    else:
+        shift_reqs = [
+            {"name": "Morning", "count": SMO_MORNING, "display": "Morning (7AM - 5PM)"},
+            {"name": "Night",   "count": SMO_NIGHT,   "display": "Night (5PM - 12AM)"}
+        ]
+
+    # Map shift names to display columns
+    shift_cols = {req["name"]: req["display"] for req in shift_reqs}
+    shift_cols["Off"] = "Off"
+
+    # 2. Default SMO Pattern (if none provided)
+    if not pattern:
+        # Day, Off, Day, Off, Night, Off, Night, Off, Off (9 days)
+        pattern = ["Morning", "Off", "Morning", "Off", "Night", "Off", "Night", "Off", "Off"]
+
+    pat_len = len(pattern)
+    
+    # 3. Setup Dates
     start_date = date(year, month, 1)
     end_date   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
     num_days   = (end_date - start_date).days
 
-    schedule:    List[dict] = []
-    rotation_day            = start_offset
-    prev_night:  List[str]  = []
+    schedule:   List[dict] = []
+    prev_night: List[str]  = []
 
+    # Track state for dynamic balancing
+    shift_counts = {o: 0 for o in officers}
+    last_shift_name = {o: None for o in officers}
+    last_shift_day = {o: -2 for o in officers}
+
+    # 4. Generate Daily Rows
     for d in range(num_days):
         cur_date     = start_date + timedelta(days=d)
         day_str      = cur_date.isoformat()
         display_date = cur_date.strftime("%d-%b-%y")
         day_name     = DAYS[cur_date.weekday()]
 
-        if working_days and day_name not in working_days:
-            row = {
-                "Date": display_date, "Day": day_name,
-                "Morning (7AM - 5PM)": "",
-                "Night (5PM - 12AM)":  "",
-                "Off":                 ", ".join(officers),
-            }
-            if night_cont:
-                row["12AM - 7AM (prev night)"] = ", ".join(prev_night)
-            schedule.append(row)
-            prev_night = []
-            continue
-
-        start_idx = (rotation_day * step) % n
-        ordered   = [officers[(start_idx + i) % n] for i in range(n)]
-
-        morning: List[str] = []
-        night:   List[str] = []
-        off:     List[str] = []
-
-        for officer in ordered:
-            on_leave = day_str in leave_map.get(officer, [])
-            if on_leave:
-                off.append(f"{officer} (Leave)")
-            elif len(morning) < morning_count:
-                morning.append(officer)
-            elif len(night) < night_count:
-                night.append(officer)
-            else:
-                off.append(officer)
-
         row = {
-            "Date": display_date, "Day": day_name,
-            "Morning (7AM - 5PM)": ", ".join(morning),
-            "Night (5PM - 12AM)":  ", ".join(night),
-            "Off":                 ", ".join(off),
+            "Date": display_date,
+            "Day":  day_name,
         }
+        for col in shift_cols.values():
+            row[col] = []
+
+        is_working_day = not working_days or day_name in working_days
+
+        if not is_working_day:
+            row["Off"] = [f"{o} (Leave)" if day_str in leave_map.get(o, []) else o for o in officers]
+        else:
+            # 1. Valid Candidates (Not on leave, and didn't work yesterday)
+            valid_candidates = []
+            for o in officers:
+                if day_str in leave_map.get(o, []):
+                    continue
+                # Enforce: "if an officer is working today it automatically take the next day as off"
+                if last_shift_day[o] == d - 1 and last_shift_name[o] not in ["Off", None]:
+                    continue
+                valid_candidates.append(o)
+                
+            # 2. Base Intent (What were they supposed to do according to the pattern?)
+            base_intent = {}
+            for o in valid_candidates:
+                idx = (start_offset + d + officers.index(o)) % pat_len
+                base_intent[o] = pattern[idx]
+                
+            day_assignments = {} # o -> shift_name
+            assigned_today = set()
+            
+            # 3. Fill exactly 'needed' for each shift
+            for req in shift_reqs:
+                s_name = req["name"]
+                needed = req["count"]
+                
+                # Group A: Those who were supposed to work this shift
+                supposed = [o for o in valid_candidates if base_intent[o] == s_name and o not in assigned_today]
+                
+                selected = []
+                if len(supposed) > needed:
+                    # Too many -> take the ones with least shifts worked
+                    supposed.sort(key=lambda x: shift_counts[x])
+                    selected = supposed[:needed]
+                else:
+                    selected = supposed
+                    
+                # If short -> draft from those supposed to be 'Off'
+                if len(selected) < needed:
+                    covers_off = [o for o in valid_candidates if base_intent[o] == "Off" and o not in assigned_today]
+                    covers_off.sort(key=lambda x: shift_counts[x])
+                    needed_more = needed - len(selected)
+                    selected.extend(covers_off[:needed_more])
+                    
+                # If STILL short -> draft from anyone available
+                if len(selected) < needed:
+                    covers_other = [o for o in valid_candidates if o not in assigned_today and o not in selected]
+                    covers_other.sort(key=lambda x: shift_counts[x])
+                    needed_more = needed - len(selected)
+                    selected.extend(covers_other[:needed_more])
+                    
+                # Record assignments
+                for o in selected:
+                    day_assignments[o] = s_name
+                    assigned_today.add(o)
+
+            # 4. Write row & update stats
+            for o in officers:
+                if day_str in leave_map.get(o, []):
+                    row["Off"].append(f"{o} (Leave)")
+                elif o in assigned_today:
+                    s = day_assignments[o]
+                    col = shift_cols[s]
+                    row.setdefault(col, []).append(o)
+                    shift_counts[o] += 1
+                    last_shift_name[o] = s
+                    last_shift_day[o] = d
+                else:
+                    row["Off"].append(o)
+
+        # Convert lists to strings
+        for k in row:
+            if isinstance(row[k], list):
+                row[k] = ", ".join(row[k])
+        
+        # Add 12AM-7AM column if night shift continues
         if night_cont:
             row["12AM - 7AM (prev night)"] = ", ".join(prev_night)
 
         schedule.append(row)
-        prev_night   = night[:]
-        rotation_day += 1
+        
+        # Extract night shift for next day's 12AM-7AM column
+        night_col = next((req["display"] for req in shift_reqs if "Night" in req["name"]), "Night (5PM - 12AM)")
+        current_night_str = row.get(night_col, "")
+        prev_night = [n.strip() for n in current_night_str.split(", ") if n.strip() and "(Leave)" not in n]
 
-    return schedule, rotation_day
+    # Return schedule and the new offset to continue next month
+    return schedule, start_offset + num_days
 
 
 def build_summary(schedule: List[dict]) -> List[dict]:
     raw: Dict[str, Dict[str, int]] = {}
-    cols = {
-        "Morning (7AM - 5PM)": "Morning",
-        "Night (5PM - 12AM)":  "Night",
-        "Off":                 "Off",
-    }
+    
+    # Identify shift columns (excluding Date and Day)
+    if not schedule:
+        return []
+    
+    all_cols = list(schedule[0].keys())
+    shift_cols = [c for c in all_cols if c not in ["Date", "Day", "12AM - 7AM (prev night)"]]
+
     for row in schedule:
-        for col, label in cols.items():
+        for col in shift_cols:
             cell = row.get(col, "")
             if not cell:
                 continue
+            
+            # Simple label for summary (e.g. "Morning (7AM - 5PM)" -> "Morning")
+            label = col.split(" (")[0] if " (" in col else col
+            
             for entry in cell.split(", "):
                 entry = entry.strip()
                 if not entry:
@@ -231,22 +269,23 @@ def build_summary(schedule: List[dict]) -> List[dict]:
                 officer  = entry.replace(" (Leave)", "").strip()
                 if not officer:
                     continue
+                
                 if officer not in raw:
-                    raw[officer] = {"Morning": 0, "Night": 0, "Off": 0, "Leave": 0}
+                    raw[officer] = {"Leave": 0}
+                
                 if on_leave:
                     raw[officer]["Leave"] += 1
                 else:
-                    raw[officer][label] += 1
+                    raw[officer][label] = raw[officer].get(label, 0) + 1
 
     has_leave = any(v["Leave"] > 0 for v in raw.values())
     result    = []
     for officer, counts in raw.items():
-        row = {
-            "Officer": officer,
-            "Morning": counts["Morning"],
-            "Night":   counts["Night"],
-            "Off":     counts["Off"],
-        }
+        row = {"Officer": officer}
+        for label, count in counts.items():
+            if label == "Leave":
+                continue
+            row[label] = count
         if has_leave:
             row["Leave"] = counts["Leave"]
         result.append(row)
@@ -254,21 +293,27 @@ def build_summary(schedule: List[dict]) -> List[dict]:
 
 
 def extract_assignments(schedule: List[dict]) -> List[dict]:
-    cols = {
-        "Morning (7AM - 5PM)": "Morning",
-        "Night (5PM - 12AM)":  "Night",
-        "Off":                 "Off",
-    }
+    if not schedule:
+        return []
+
+    all_cols = list(schedule[0].keys())
+    shift_cols = [c for c in all_cols if c not in ["Date", "Day", "12AM - 7AM (prev night)"]]
+    
     assignments = []
     for row in schedule:
         try:
             date_iso = datetime.strptime(row["Date"], "%d-%b-%y").strftime("%Y-%m-%d")
         except Exception:
             date_iso = row["Date"]
-        for col, shift_label in cols.items():
+            
+        for col in shift_cols:
             cell = row.get(col, "")
             if not cell:
                 continue
+                
+            # Simple label for storage
+            shift_label = col.split(" (")[0] if " (" in col else col
+            
             for entry in cell.split(", "):
                 entry    = entry.strip()
                 on_leave = "(Leave)" in entry

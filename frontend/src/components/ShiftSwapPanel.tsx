@@ -60,7 +60,6 @@ export default function ShiftSwapPanel({ officerNames, scheduleId, currentUser }
     setSaving(true); setError("");
     try {
       await createSwap({
-        requester_name: requester,
         target_name:    target,
         requester_date: reqDate,
         target_date:    tgtDate,

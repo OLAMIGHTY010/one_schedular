@@ -39,6 +39,7 @@ export type Officer = {
   id:                   number;
   name:                 string;
   email:                string;
+  unit?:                string;
   is_active:            boolean;
   is_teamlead?:         boolean;
   last_assigned_shift?: string;
@@ -89,6 +90,16 @@ export type ShiftModelRecord = {
   max_concurrent_leave: number;
   night_continues:      boolean;
 };
+
+// ── Aliases for backward compatibility with components ──
+export type OfficerRecord = Officer;
+export type LeaveReqRecord = LeaveReq;
+export type SwapRequest = SwapReq;
+export type ShiftTypeConfig = ShiftType;
+export type HolidayRecord = any;
+export type MyScheduleRow = any;
+export type MyStats = any;
+export type ShiftModelPayload = Omit<ShiftModelRecord, "id" | "team_id">;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -306,16 +317,16 @@ export const seedNigerianHolidays = async () =>
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
-export const fetchAnalytics = async (
-  year?:        number,
-  month?:       number,
-  months_back = 6,
-) => {
-  const p = new URLSearchParams();
-  if (year)  p.set("year",        String(year));
-  if (month) p.set("month",       String(month));
-  p.set("months_back", String(months_back));
-  return (await api.get(`/api/analytics/?${p}`)).data;
+export const fetchAnalytics = async (p: {
+  year?:        number;
+  month?:       number;
+  months_back?: number;
+}) => {
+  const params = new URLSearchParams();
+  if (p.year)  params.set("year",        String(p.year));
+  if (p.month) params.set("month",       String(p.month));
+  params.set("months_back", String(p.months_back ?? 6));
+  return (await api.get(`/api/analytics/?${params}`)).data;
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -328,5 +339,20 @@ export const saveSettings = async (d: {
   send_hour:         number;
   auto_generate_day: number;
 }) => (await api.put("/api/settings/", d)).data;
+
+// ── User Management (Missing in api.ts) ───────────────────────────────────────
+
+export const listUsers   = async () => (await api.get("/api/teams/members")).data;
+export const promoteUser = async (email: string) => (await api.post("/api/users/promote", { email })).data;
+export const demoteUser  = async (email: string) => (await api.post("/api/users/demote",  { email })).data;
+
+// ── Aliases for function names expected by components ─────────────────────────
+
+export const createLeaveRequest = submitLeave;
+export const createSwap = submitSwap;
+export const reviewLeaveRequest = reviewLeave;
+export const createOfficer = addOfficer;
+export const deleteOfficer = removeOfficer;
+export const createHoliday = addHoliday;
 
 export default api;

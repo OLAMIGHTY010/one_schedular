@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  fetchOfficers, createOfficer, updateOfficer,
-  deleteOfficer, type OfficerRecord,
+  fetchOfficers, addOfficer, updateOfficer,
+  removeOfficer, type OfficerRecord,
 } from "../services/api";
 
 type Props = {
@@ -21,7 +21,7 @@ export default function OfficersPanel({ onOfficersChange, filterUnit }: Props) {
 
   const load = async () => {
     try {
-      const data = await fetchOfficers(filterUnit ?? undefined);
+      const data = await fetchOfficers();
       setOfficers(data);
       onOfficersChange(data);
     } catch {}
@@ -35,7 +35,7 @@ export default function OfficersPanel({ onOfficersChange, filterUnit }: Props) {
   };
 
   const openEdit = (o: OfficerRecord) => {
-    setName(o.name); setEmail(o.email); setUnit(o.unit ?? "");
+    setName(o.name); setEmail(o.email);
     setEditingId(o.id); setShowForm(true);
   };
 
@@ -49,9 +49,9 @@ export default function OfficersPanel({ onOfficersChange, filterUnit }: Props) {
     try {
       const payload = { name: name.trim(), email: email.trim(), unit: unit.trim() || undefined };
       if (editingId !== null) {
-        await updateOfficer(editingId, payload);
+        await updateOfficer(editingId, name.trim(), email.trim());
       } else {
-        await createOfficer(payload);
+        await addOfficer(name.trim(), email.trim());
       }
       await load(); resetForm();
     } catch (e: any) {
@@ -61,7 +61,7 @@ export default function OfficersPanel({ onOfficersChange, filterUnit }: Props) {
 
   const handleDelete = async (o: OfficerRecord) => {
     if (!confirm(`Remove ${o.name} from the system?`)) return;
-    try { await deleteOfficer(o.id); await load(); }
+    try { await removeOfficer(o.id); await load(); }
     catch (e: any) { alert(e.response?.data?.detail ?? "Failed to remove."); }
   };
 
@@ -159,7 +159,6 @@ export default function OfficersPanel({ onOfficersChange, filterUnit }: Props) {
               <p className="font-semibold text-gray-800 text-sm">{o.name}</p>
               <p className="text-xs text-gray-500">
                 {o.email}
-                {o.unit ? <span className="ml-2 px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">{o.unit}</span> : null}
                 {o.last_assigned_shift
                   ? <span className="ml-2 text-gray-400">last: {o.last_assigned_shift}</span>
                   : null}
