@@ -49,9 +49,21 @@ def list_swaps(
 ):
     if not user.team_id:
         return []
+    role = get_role(user, db)
     q = db.query(ShiftSwapRequest).filter(
         ShiftSwapRequest.team_id == user.team_id   # TEAM ISOLATION
     )
+    if role != "teamlead":
+        # Officers see only swaps where they are requester or target
+        o = db.query(Officer).filter(
+            Officer.email   == user.email,
+            Officer.team_id == user.team_id,
+        ).first()
+        officer_name = o.name if o else (user.display_name or user.email.split("@")[0])
+        q = q.filter(
+            (ShiftSwapRequest.requester_name == officer_name)
+            | (ShiftSwapRequest.target_name == officer_name)
+        )
     if status:
         q = q.filter(ShiftSwapRequest.status == status)
     return [_dict(r) for r in q.order_by(ShiftSwapRequest.created_at.desc()).limit(100).all()]

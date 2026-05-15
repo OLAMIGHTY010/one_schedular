@@ -14,39 +14,6 @@ class TokenResponse(BaseModel):
     officer_id:   Optional[int] = None
 
 
-class OfficerCreate(BaseModel):
-    name:  str
-    email: str
-    unit:  Optional[str] = None
-
-    @field_validator("email")
-    @classmethod
-    def must_be_sterling(cls, v: str) -> str:
-        v = v.strip().lower()
-        if not v.endswith("@sterling.ng"):
-            raise ValueError("Officer email must end with @sterling.ng")
-        return v
-
-    @field_validator("name")
-    @classmethod
-    def name_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Officer name cannot be empty")
-        return v.strip()
-
-
-class OfficerResponse(BaseModel):
-    id:                  int
-    name:                str
-    email:               str
-    unit:                Optional[str]
-    is_active:           bool
-    last_assigned_shift: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-
 class ShiftTypeConfig(BaseModel):
     name:       str
     start_time: Optional[str] = None
